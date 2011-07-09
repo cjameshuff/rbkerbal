@@ -9,7 +9,7 @@ end
 # altitude is above sea level, which is 600 km from the center of the planet
 r = ARGV[0].to_f + 600.0e3
 
-puts "r: %4d km" % [r]
+puts "r: %4d km" % [r/1000.0]
 
 puts "Escape velocity = %7.2f m/s" % [vesc(r, M_KERBAL)]
 
