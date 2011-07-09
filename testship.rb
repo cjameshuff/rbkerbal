@@ -9,4 +9,3 @@ ft1 = dc1.link(FuelTank.new(ship))
 le1 = ft1.link(LiquidEngine.new(ship))
 
 ship.write("testout.craft")
-
