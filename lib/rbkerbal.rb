@@ -4,31 +4,46 @@ class ShipPart
     attr_accessor :pos, :rot, :stg, :istg, :name, :sqor
     
     @@cfgs = {}
+    
+    def load_cfg(part_cfg)
+        cfg_file = File.open("KSP/Parts/#{part_cfg}/part.cfg")
+        cfg = {}
+        cfg_file.each_line {|line|
+            line.strip!
+            if(line.length > 0 && !line.start_with?('//'))
+                var, val = line.split('=', 2)
+                cfg[var.strip.to_sym] = val.strip
+            end
+        }
+        cfg_file.close
+        @@cfgs[part_cfg.to_sym] = cfg
+        
+        # All variables are initially strings, do some cleanup
+        if(cfg[:attachRules])
+            attach_rules = {}
+            rules = cfg[:attachRules].split(',').map{|x| x.strip.to_i}
+            attach_rules[:stack] = (rules[0] != 0)
+            attach_rules[:srfAttach] = (rules[1] != 0)
+            attach_rules[:allowStack] = (rules[2] != 0)
+            attach_rules[:allowSrfAttach] = (rules[3] != 0)
+            attach_rules[:allowCollision] = (rules[4] != 0)
+            cfg[:attachRules] = attach_rules
+        end
+        
+        # parse nodes
+        # pos-x, pos-y, pos-z, up-x, up-y, up-z, size
+        cfg[:nodes] = {}
+        cfg.keys.find_all {|key| key.to_s.start_with?('node_')}.each {|key|
+            node_name = key[5, key.length].to_sym
+            cfg[:nodes][node_name] = cfg[key].split(',').map{|x| x.strip.to_f}
+        }
+    end
+    
     def initialize(part_cfg, ship)
         if(!@@cfgs[part_cfg.to_sym])
-            cfg_file = File.open("KSP/Parts/#{part_cfg}/part.cfg")
-            cfg = {}
-            cfg_file.each_line {|line|
-                line.strip!
-                if(line.length > 0 && !line.start_with?('//'))
-                    var, val = line.split('=', 2)
-                    cfg[var.strip.to_sym] = val.strip
-                end
-            }
-            cfg_file.close
-            @@cfgs[part_cfg.to_sym] = cfg
+            load_cfg(part_cfg)
         end
         @cfg = @@cfgs[part_cfg.to_sym]
-        
-        if(@cfg[:attachRules])
-            @attach_rules = {}
-            rules = @cfg[:attachRules].split(',').map{|x| x.strip.to_i}
-            @attach_rules[:stack] = (rules[0] != 0)
-            @attach_rules[:srfAttach] = (rules[1] != 0)
-            @attach_rules[:allowStack] = (rules[2] != 0)
-            @attach_rules[:allowSrfAttach] = (rules[3] != 0)
-            @attach_rules[:allowCollision] = (rules[4] != 0)
-        end
         
         @name = ship.get_part_id(@cfg[:name].to_sym)
         @pos = [0, 0, 0]
@@ -62,11 +77,11 @@ end # class ShipPart
 class SimplePart < ShipPart
     def initialize(part_cfg, ship)
         super(part_cfg, ship)
-        node_stack_top = @cfg[:node_stack_top].split(',').map{|x| x.strip.to_f}
-        node_stack_bottom = @cfg[:node_stack_bottom].split(',').map{|x| x.strip.to_f}
+        node_stack_top = @cfg[:nodes][:stack_top]
+        node_stack_bottom = @cfg[:nodes][:stack_bottom]
         puts "#{name} node_stack_top: #{node_stack_top}"
         puts "#{name} node_stack_bottom: #{node_stack_bottom}"
-        @height = node_stack_top[1] - node_stack_bottom[1]
+        @height = (node_stack_top[1] - node_stack_bottom[1])*@cfg[:scale].to_f
         puts "#{name} height: #{@height}"
     end
     
