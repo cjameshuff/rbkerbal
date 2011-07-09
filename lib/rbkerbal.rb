@@ -2,8 +2,35 @@
 
 class ShipPart
     attr_accessor :pos, :rot, :stg, :istg, :name, :sqor
-    def initialize(name)
-        @name = name
+    
+    @@cfgs = {}
+    def initialize(part_cfg, ship)
+        if(!@@cfgs[part_cfg.to_sym])
+            cfg_file = File.open("KSP/Parts/#{part_cfg}/part.cfg")
+            cfg = {}
+            cfg_file.each_line {|line|
+                line.strip!
+                if(line.length > 0 && !line.start_with?('//'))
+                    var, val = line.split('=', 2)
+                    cfg[var.strip.to_sym] = val.strip
+                end
+            }
+            cfg_file.close
+            @@cfgs[part_cfg.to_sym] = cfg
+        end
+        @cfg = @@cfgs[part_cfg.to_sym]
+        
+        if(@cfg[:attachRules])
+            @attach_rules = {}
+            rules = @cfg[:attachRules].split(',').map{|x| x.strip.to_i}
+            @attach_rules[:stack] = (rules[0] != 0)
+            @attach_rules[:srfAttach] = (rules[1] != 0)
+            @attach_rules[:allowStack] = (rules[2] != 0)
+            @attach_rules[:allowSrfAttach] = (rules[3] != 0)
+            @attach_rules[:allowCollision] = (rules[4] != 0)
+        end
+        
+        @name = ship.get_part_id(@cfg[:name].to_sym)
         @pos = [0, 0, 0]
         @rot = [0, 0, 0, 1]
         @stg = 8
@@ -23,11 +50,7 @@ class ShipPart
         fout.puts "\trot = #{@rot}"
         fout.puts "\tstg = #{@stg}"
         fout.puts "\tistg = #{@istg}"
-        if(@sqor)
-            fout.puts "\tsqor = False"
-        else
-            fout.puts "\tsqor = True"
-        end
+        fout.puts (@sqor)? "\tsqor = True" : "\tsqor = False"
         @links.each{|links| fout.puts "\tlink = #{links.name}"}
         fout.puts "}"
         @links.each{|link| link.write(fout)}
@@ -37,9 +60,14 @@ end # class ShipPart
 
 # Lots of modules just mount a single item underneath
 class SimplePart < ShipPart
-    def initialize(name, height)
-        super(name)
-        @height = height
+    def initialize(part_cfg, ship)
+        super(part_cfg, ship)
+        node_stack_top = @cfg[:node_stack_top].split(',').map{|x| x.strip.to_f}
+        node_stack_bottom = @cfg[:node_stack_bottom].split(',').map{|x| x.strip.to_f}
+        puts "#{name} node_stack_top: #{node_stack_top}"
+        puts "#{name} node_stack_bottom: #{node_stack_bottom}"
+        @height = node_stack_top[1] - node_stack_bottom[1]
+        puts "#{name} height: #{@height}"
     end
     
     # Stack decouplers mount a single module underneath
@@ -60,7 +88,7 @@ end # class SimplePart
 
 class Pod_Mk1 < ShipPart
     def initialize(ship)
-        super(ship.get_part_id(:mk1pod))
+        super("mk1pod", ship)
     end
     
     def link_chute(chute)
@@ -91,21 +119,21 @@ end # class Pod_Mk1
 
 class ParachuteSingle < ShipPart
     def initialize(ship)
-        super(ship.get_part_id(:parachuteSingle))
+        super("parachute_single", ship)
     end
 end # class ParachuteSingle
 
 
 class StackDecoupler < SimplePart
     def initialize(ship)
-        super(ship.get_part_id(:stackDecoupler), 1.066)
+        super("stackDecoupler", ship)
     end
 end # class StackDecoupler
 
 
 class RadialDecoupler < ShipPart
     def initialize(ship)
-        super(ship.get_part_id(:radialDecoupler))
+        super("radialDecoupler", ship)
     end
     
     # Radial decouplers mount a single module on the side (always a solid booster?)
@@ -129,7 +157,7 @@ end # class RadialDecoupler
 
 class FuelTank < SimplePart
     def initialize(ship)
-        super(ship.get_part_id(:fuelTank), 1.4645)
+        super("fuelTank", ship)
         @radials = []
     end
     
@@ -150,7 +178,7 @@ end # class FuelTank
 class SolidBooster < SimplePart
     def initialize(ship)
         # TODO: fix booster height!
-        super(ship.get_part_id(:solidBooster), 1.4645)
+        super("solidBooster", ship)
         @radials = []
     end
     
@@ -171,7 +199,7 @@ end # class FuelTank
 
 class SAS_Module < SimplePart
     def initialize(ship)
-        super(ship.get_part_id(:sasModule), 1.057)
+        super("sasModule", ship)
         @radials = []
     end
 end # class SAS_Module
@@ -179,7 +207,7 @@ end # class SAS_Module
 
 class LiquidEngine < SimplePart
     def initialize(ship)
-        super(ship.get_part_id(:liquidEngine), 0.81)
+        super("liquidEngine1", ship)
         @radials = []
     end
 end # class SAS_Module
