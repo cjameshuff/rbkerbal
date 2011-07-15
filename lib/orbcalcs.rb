@@ -26,6 +26,14 @@ def vesc(r, m)
     Math.sqrt(2*G*m/r)
 end
 
+def semimaj(r, v, m)
+    1.0/(2.0/r - v*v/(G*m))
+end
+
+def opoapsis(r, v, m)
+    2.0*semimaj(r, v, m) - r
+end
+
 # Specific energy (E/m)
 def espec(r, v, m)
     ((v*v)/2.0 - (G*m)/r)
