@@ -337,7 +337,6 @@ function UpdateStats()
 }
 
 function PeriapsisChanged() {
-	if(safety) return;
 	paramLock = document.getElementById("paramLockSelect").value;
 	peri = +document.getElementById("periInput").value + KERBIN_R;
 	if(paramLock == "apo-peri")
@@ -349,7 +348,6 @@ function PeriapsisChanged() {
 	writedbg("SetApsides(): apoapsis: " + apoapsis + ", periapsis: " + periapsis);
 }
 function ApsoapsisChanged() {
-	if(safety) return;
 	paramLock = document.getElementById("paramLockSelect").value;
 	apo = +document.getElementById("apoInput").value + KERBIN_R;
 	if(paramLock == "apo-peri")
@@ -363,7 +361,6 @@ function ApsoapsisChanged() {
 
 // Set velocity at apoapsis, recompute periapsis
 function ApoVelChanged() {
-	if(safety) return;
 	paramLock = document.getElementById("paramLockSelect").value;
 	apovel = +document.getElementById("apovelInput").value;
 	if(paramLock == "apo-peri")
@@ -376,7 +373,6 @@ function ApoVelChanged() {
 
 // Set velocity at periapsis, recompute apoapsis
 function PeriVelChanged() {
-	if(safety) return;
 	paramLock = document.getElementById("paramLockSelect").value;
 	perivel = +document.getElementById("perivelInput").value;
 	if(paramLock == "apo-peri")
@@ -575,7 +571,7 @@ window.onload = function() {
 		<tr>
 	<td>Apoapsis AMSL: <input type="text" id="apoInput" size="8" onchange="ApsoapsisChanged()"></td>
 	<td>Velocity: <input type="text" id="apovelInput" size="8" onchange="ApoVelChanged()"></td>
-	<td><input type="checkbox" id="safetyBtn" size="8" onchange="SafetyBtnChanged()">Safety</td>
+	<td><input type="checkbox" id="safetyBtn" size="8" onchange="SafetyBtnChanged()">Ignore Mouse</td>
 		</tr>
 	</table>
 	<div><textarea id="debugDiv" rows="20" cols="60" wrap="virtual" style="width:640px; height:250px"></textarea></div><br>
