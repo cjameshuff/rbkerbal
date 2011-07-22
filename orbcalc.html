@@ -9,7 +9,6 @@
 // http://www.w3schools.com/jsref/default.asp
 
 var mainCanvasCtx, mainCanvas;
-var bodyTable;
 
 var mouseIsDown = false;
 var mouseIsDragging = false;
@@ -24,47 +23,6 @@ function writedbg(msg) {if(debugDiv) debugDiv.value += msg + "\n";}
 function frgba(r, g, b, a) {return ["rgba(", r, ",", g, ",", b, ",", a, ")"].join("");}
 function frgb(r, g, b) {return ["rgb(", r, ",", g, ",", b, ")"].join("");}
 
-
-//************************************************************************************************
-
-function Vect2(x, y) {
-	this.x = x;
-	this.y = y;
-}
-
-Vect2.prototype.set = function(x, y) {this.x = x; this.y = y; return this;}
-
-Vect2.prototype.clone = function() {return new Vect2(this.x, this.y);}
-
-Vect2.prototype.length_sqr = function() {return this.x*this.x + this.y*this.y;}
-Vect2.prototype.length = function() {return Math.sqrt(this.x*this.x + this.y*this.y);}
-
-Vect2.prototype.normalized = function() {return this.divs(this.length());}
-Vect2.prototype.normalize_eq = function() {return this.diveqs(this.length());}
-
-Vect2.prototype.dot = function(rhs) {return (this.x*rhs.x + this.y*rhs.y);}
-
-Vect2.prototype.add = function(rhs) {return new Vect2(this.x + rhs.x, this.y + rhs.y);}
-Vect2.prototype.sub = function(rhs) {return new Vect2(this.x - rhs.x, this.y - rhs.y);}
-Vect2.prototype.mul = function(rhs) {return new Vect2(this.x*rhs.x, this.y*rhs.y);}
-Vect2.prototype.div = function(rhs) {return new Vect2(this.x/rhs.x, this.y/rhs.y);}
-
-Vect2.prototype.adds = function(rhs) {return new Vect2(this.x + rhs, this.y + rhs);}
-Vect2.prototype.subs = function(rhs) {return new Vect2(this.x - rhs, this.y - rhs);}
-Vect2.prototype.muls = function(rhs) {return new Vect2(this.x*rhs, this.y*rhs);}
-Vect2.prototype.divs = function(rhs) {return new Vect2(this.x/rhs, this.y/rhs);}
-
-Vect2.prototype.addeq = function(rhs) {this.x += rhs.x; this.y += rhs.y; return this;}
-Vect2.prototype.subeq = function(rhs) {this.x -= rhs.x; this.y -= rhs.y; return this;}
-Vect2.prototype.muleq = function(rhs) {this.x *= rhs.x; this.y *= rhs.y; return this;}
-Vect2.prototype.diveq = function(rhs) {this.x /= rhs.x; this.y /= rhs.y; return this;}
-
-Vect2.prototype.addeqs = function(rhs) {this.x += rhs; this.y += rhs; return this;}
-Vect2.prototype.subeqs = function(rhs) {this.x -= rhs; this.y -= rhs; return this;}
-Vect2.prototype.muleqs = function(rhs) {this.x *= rhs; this.y *= rhs; return this;}
-Vect2.prototype.diveqs = function(rhs) {this.x /= rhs; this.y /= rhs; return this;}
-
-
 //************************************************************************************************
 
 var KERBIN_R = 600e3
@@ -74,6 +32,8 @@ var infinity = 1.7976931348623157E+10308;
 var periapsis = 0, apoapsis = 0;
 var periapsisVel = 0, apoapsisVel = 0;// these are calculated from the above for elliptical orbits
 var elliptical = true;
+
+var safety = false;
 
 //************************************************************************************************
 
@@ -134,9 +94,14 @@ function DrawMainCanvas()
 	
 	ctx.save();
 	ctx.beginPath();
-	ctx.translate(w2s_x(semimaj - periapsis), w2s_y(0));
-	ctx.scale(1.0, semimin/semimaj);
-	ctx.arc(0, 0, semimaj/scale, 0, 2*pi, false);
+	ctx.moveTo(w2s_x(apoapsis), w2s_y(0));
+	n = 720
+	for(j = 0; j <= n; ++j) {
+		th = Math.PI*2.0*j/n;
+		x = w2s_x(Math.cos(th)*semimaj + semimaj - periapsis);
+		y = w2s_y(Math.sin(th)*semimin);
+		ctx.lineTo(Math.min(width, Math.max(0, x)), Math.min(height, Math.max(0, y)));
+	}
 	ctx.stroke();
 	ctx.restore();
 	
@@ -148,8 +113,7 @@ function SetFromApoapsisPeriapsisEll(peri, apo)
 	apoapsis = apo;
 	periapsis = peri;
 	// Can not make an elliptical trajectory parabolic/hyperbolic by setting apsides
-	if(apoapsis < periapsis)
-	{
+	if(apoapsis < periapsis) {
 		tmp = apoapsis;
 		apoapsis = periapsis;
 		periapsis = tmp;
@@ -172,6 +136,31 @@ function SetFromPeriapsis(peri)
 		SetFromApoapsisPeriapsisEll(peri, apoapsis);
 	else // Parabolic/hyperbolic
 		SetFromPeriapsisPerivel();
+}
+
+function SetFromApovelPerivel(apovel, perivel)
+{
+	// v = sqrt(mu*(2.0/r - 1/a));
+	// 
+	// So:
+	// r1 = 2.0/(2.0/r0 - v0*v0/mu) - r0;
+	// v1 = sqrt(mu*(2.0/r1 - 2.0/(r0 + r1)));
+	// 
+	// Wolfram Alpha to the rescue...
+	// If v0*v0 != v0*v1: (v0 != v1, false for circular orbits)
+	// 	r0 = 2*mu/(v0*v0 - v0*v1)
+	// If v0*(v0 + v1) != 0: (v0 > 0 and v0 + v1 > 0, which is always true for sane numbers)
+	// 	r0 = 2*mu/(v0*(v0 + v1))
+	if(apovel > perivel) {
+		tmp = apovel;
+		apovel = periapsisVel;
+		perivel = tmp;
+	}
+	periapsisVel = perivel;
+	apoapsisVel = apovel;
+	periapsis = 2*KERBIN_GM/(perivel*(perivel + apovel));
+	apoapsis = 2.0/(2.0/periapsis - perivel*perivel/KERBIN_GM) - periapsis;
+//	apoapsisVelCheck = Math.sqrt(KERBIN_GM*(2.0/apoapsis - 2.0/(periapsis + apoapsis)));
 }
 
 function SetFromPeriapsisPerivel(peri, perivel)
@@ -220,6 +209,81 @@ function SetFromApoapsisApovel(apo, apovel)
 	}
 }
 
+// Taylor series approximation of inverse of Kepler's equation
+function InvKep(M, e)
+{
+	// 3! = 6, 5! = 120, 7! = 540, 9! = 362880
+	me = 1 - e
+	me2 = me*me
+	me3 = me2*me
+	me4 = me2*me2
+	me7 = me4*me3
+	me10 = me7*me3
+	me13 = me10*me3
+	
+	e2 = e*e
+	e3 = e2*e
+	e4 = e3*e
+	
+	E = M*(1.0/me -
+			M*M*(e/(me4*6) +
+				M*M*((9*e2 + e)/(me7*120) -
+					M*M*((225*e3 + 54*e2 + e)/(me10*540) +
+						M*M*(11025*e4 + 4131*e3 + 243*e2 + e)/(me13*362880)))));
+	return E;
+}
+
+function SetFromDataPoints(data)
+{
+	// We only have velocity, altitude, 
+	// v = sqrt(mu*(2/r - 1/a))
+	
+	// Given mu, v0, r0, v1, r1:
+	// v0 = sqrt(mu*(2/r0 - 1/a))
+	// v1 = sqrt(mu*(2/r1 - 1/a))
+	// r0 = 2/(v0^2/mu + 1/a)
+	// r1 = 2/(v1^2/mu + 1/a)
+	// a = 1/(2/r0 - v0^2/mu)
+	// a = 1/(2/r1 - v1^2/mu)
+	// a = (apo + peri)/2
+	
+	// E = ((v*v)/2.0 - (G*m)/r)
+	
+	// Period:
+	// P = 2*pi*sqrt(a**3/mu)
+	// Mean anomaly:
+	// M = 2*pi*t/P = t/sqrt(a**3/mu)
+	// M = E - e*sin(E)
+	// t/sqrt(a**3/mu) = E - e*sin(E)
+	// E = InvKep(t/sqrt(a**3/mu), e)
+	// tan(halftheta) = sqrt((1 + e)/(1 - e))*tan(E/2)
+	// r = a*(1 - e*e)/(1 + e*cos(theta))
+}
+
+// Set up ellipse from altitude, velocity, and angle
+function SetFromRVA(r, v, ang)
+{
+	// angle is of velocity vector, tangent to ellipse, to a ray from the planet
+	cosa = Math.cos(ang)
+	sina = Math.sin(ang)
+	//a = 1/(2/r - v^2/mu)
+	a = 1.0/(2.0/r - v*v/KERBIN_GM);// semimajor axis
+	
+	// Only known with e:
+	// b = a*sqrt(1 - e*e)
+	// e = (apo - peri)/(apo + peri) = (apo - peri)/(2*a)
+	// peri = a - e*a
+	// apo = 2*a - peri
+	
+	b = a*Math.sqrt(1 - e*e);// semiminor axis
+	
+	
+	// point and tangent on ellipse by angle from center of corresponding circle:
+	// ex = cos(th), ey = sin(th)*b/a
+	// tx = -sin(th), ty = cos(th)*b/a
+	// atan(-tan(ang)*b/a) = th
+}
+
 function UpdateStats()
 {
 	debugDiv.value = ""
@@ -237,18 +301,24 @@ function UpdateStats()
 		period = 2.0*Math.PI*Math.sqrt(Math.pow((peri + apo)/2.0, 3)/KERBIN_GM)
 		periEscVel = Math.sqrt(2.0*KERBIN_GM/periapsis)
 		apoEscVel = Math.sqrt(2.0*KERBIN_GM/apoapsis)
+		periHohDV = Math.abs(vperi - Math.sqrt(KERBIN_GM/periapsis))
+		apoHohDV = Math.abs(vapo - Math.sqrt(KERBIN_GM/apoapsis))
 	
 		document.getElementById("periInput").value = periapsis - KERBIN_R;
 		document.getElementById("apoInput").value = apoapsis - KERBIN_R;
 		document.getElementById("perivelInput").value = periapsisVel;
 		document.getElementById("apovelInput").value = apoapsisVel;
 		writedbg("periapsis: " + (periapsis/1e3).toFixed(4) + " km, apoapsis: " + (apoapsis/1e3).toFixed(4) + " km");
-		writedbg("periapsis: " + ((periapsis - KERBIN_R)/1e3).toFixed(4) + " km AMSL," +
-			" apoapsis: " + ((apoapsis - KERBIN_R)/1e3).toFixed(4) + " km AMSL");
-		writedbg("velocity at periapsis: " + vperi.toFixed(1) + " m/s, velocity at apoapsis: " + vapo.toFixed(1) + " m/s");
-		writedbg("Vesc at periapsis: " + periEscVel.toFixed(1) + " m/s, Vesc at apoapsis: " + apoEscVel.toFixed(1) + " m/s");
+		writedbg("periapsis: " + ((periapsis - KERBIN_R)/1e3).toFixed(4) + " km AMSL, " +
+			"apoapsis: " + ((apoapsis - KERBIN_R)/1e3).toFixed(4) + " km AMSL");
+		writedbg("\nvelocity at periapsis: " + vperi.toFixed(1) + " m/s, " + 
+			"at apoapsis: " + vapo.toFixed(1) + " m/s");
+		writedbg("Hohmann delta-v at periapsis: " + periHohDV.toFixed(1) + " m/s, " + 
+			"at apoapsis: " + apoHohDV.toFixed(1) + " m/s");
+		writedbg("Vesc at periapsis: " + periEscVel.toFixed(1) + " m/s, " + 
+			"at apoapsis: " + apoEscVel.toFixed(1) + " m/s");
 	
-		writedbg("period: " + (period/60).toFixed(1) + " minutes");
+		writedbg("\nperiod: " + (period/60).toFixed(1) + " minutes");
 		writedbg("semimajor axis: " + (semimaj/1e3).toFixed(4) + " km");
 		writedbg("semiminor axis: " + (semimin/1e3).toFixed(4) + " km");
 		writedbg("eccentricity: " + ecc.toFixed(1));
@@ -266,8 +336,8 @@ function UpdateStats()
 	}
 }
 
-
 function PeriapsisChanged() {
+	if(safety) return;
 	paramLock = document.getElementById("paramLockSelect").value;
 	peri = +document.getElementById("periInput").value + KERBIN_R;
 	if(paramLock == "apo-peri")
@@ -279,6 +349,7 @@ function PeriapsisChanged() {
 	writedbg("SetApsides(): apoapsis: " + apoapsis + ", periapsis: " + periapsis);
 }
 function ApsoapsisChanged() {
+	if(safety) return;
 	paramLock = document.getElementById("paramLockSelect").value;
 	apo = +document.getElementById("apoInput").value + KERBIN_R;
 	if(paramLock == "apo-peri")
@@ -291,38 +362,75 @@ function ApsoapsisChanged() {
 }
 
 // Set velocity at apoapsis, recompute periapsis
-function ApoVelChanged(x, y) {
+function ApoVelChanged() {
+	if(safety) return;
+	paramLock = document.getElementById("paramLockSelect").value;
 	apovel = +document.getElementById("apovelInput").value;
-	SetFromApoapsisApovel(apoapsis, apovel)
+	if(paramLock == "apo-peri")
+		SetFromApovelPerivel(apovel, periapsisVel);
+	else
+		SetFromApoapsisApovel(apoapsis, apovel);
 	UpdateStats();
 	DrawMainCanvas();
 }
 
 // Set velocity at periapsis, recompute apoapsis
 function PeriVelChanged() {
+	if(safety) return;
+	paramLock = document.getElementById("paramLockSelect").value;
 	perivel = +document.getElementById("perivelInput").value;
-	SetFromPeriapsisPerivel(periapsis, perivel);
+	if(paramLock == "apo-peri")
+		SetFromApovelPerivel(apoapsisVel, perivel);
+	else
+		SetFromPeriapsisPerivel(periapsis, perivel);
 	UpdateStats();
 	DrawMainCanvas();
 }
 
-var savedApoapsis, savedPeriapsis;
-var savedApovel, savedPerivel;
+var zooming = false;
+var savedScale = 0;
 
-function MouseMoved(x, y) {}
-function MouseDown(x, y) {
-	savedApoapsis = apoapsis;
-	savedPeriapsis = periapsis;
-	savedApovel = apoapsisVel;
-	savedPerivel = periapsisVel;
-	MouseDragging(x, y, 0, 0);
+function MouseMoved(evt, x, y) {}
+function MouseDown(evt, x, y) {
+	if(safety) return;
+	if(event.shiftKey)
+	{
+		zooming = true;
+		savedScale = scale;
+	}
+	else
+	{
+		zooming = false;
+		MouseDragging(evt, x, y, x, y);
+	}
 }
 
-function MouseClicked(x, y) {}
-function MouseDragged(x, y, prevX, prevY) {}
+function MouseClicked(evt, x, y) {}
+function MouseDragged(evt, x, y, prevX, prevY) {}
 
-function MouseDragging(x, y, prevX, prevY) {
-	var height = mainCanvasCtx.canvas.height;
+function MouseDragging(evt, x, y, prevX, prevY) {
+	if(safety) return;
+	if(zooming)
+	{
+		width = mainCanvasCtx.canvas.width;
+		height = mainCanvasCtx.canvas.height;
+		// Zoom
+		scale = savedScale + (savedScale*(y - cursorClickY))/height;
+		canvasMinX = -scale;
+		canvasMinY = -scale;
+		canvasSizeX = 3*scale;
+		canvasSizeY = canvasSizeX*height/width;// square aspect ratio
+		scaleX = width/canvasSizeX;
+		scaleY = height/canvasSizeY;
+		DrawMainCanvas();
+	}
+	else
+	{
+		MouseDragAltitude(evt, x, y, prevX, prevY)
+	}
+}
+function MouseDragAltitude(evt, x, y, prevX, prevY) {
+	if(safety) return;
 	paramLock = document.getElementById("paramLockSelect").value;
 	click_wx = s2w_x(cursorClickX)
 	wx = s2w_x(x)
@@ -374,6 +482,11 @@ function MouseDragging(x, y, prevX, prevY) {
 	DrawMainCanvas();
 }
 
+function SafetyBtnChanged(self)
+{
+	safety = document.getElementById("safetyBtn").checked;
+}
+
 //************************************************************************************************
 
 window.onload = function() {
@@ -401,7 +514,7 @@ window.onload = function() {
 					(window.pageYOffset || document.body.scrollTop || document.documentElement.scrollTop);
 		cursorClickX = cursorLastX;
 		cursorClickY = cursorLastY;
-		MouseDown(cursorClickX, cursorClickY);
+		MouseDown(evt, cursorClickX, cursorClickY);
 		return false;
 	}
 	//if mouse is down, get mouseup events from window, not just canvas. Otherwise ignore.
@@ -415,11 +528,11 @@ window.onload = function() {
 			if(mouseIsDragging) {
 				//mouse dragged
 				mouseIsDragging = false;
-				MouseDragged(x, y, cursorLastX, cursorLastY);
+				MouseDragged(evt, x, y, cursorLastX, cursorLastY);
 			}
 			else {
 				//mouse clicked
-				MouseClicked(x, y);
+				MouseClicked(evt, x, y);
 			}
 		}
 		return false;
@@ -431,11 +544,11 @@ window.onload = function() {
 					(window.pageYOffset || document.body.scrollTop || document.documentElement.scrollTop);
 		if(mouseIsDown) {
 			mouseIsDragging = true;
-			MouseDragging(x, y, cursorLastX, cursorLastY);
+			MouseDragging(evt, x, y, cursorLastX, cursorLastY);
 			cursorLastX = x;
 			cursorLastY = y;
 		}
-		MouseMoved(x, y);
+		MouseMoved(evt, x, y);
 		return false;
 	}
 	writedbg("Init done");
@@ -450,14 +563,21 @@ window.onload = function() {
 </head>
 <body>
 	<canvas id="mainCanvas" width="800" height="600"></canvas><br>
-	Periapsis (above ground): <input type="text" id="periInput" size="8" onchange="PeriapsisChanged()">&nbsp;
-	Velocity: <input type="text" id="perivelInput" size="8" onchange="PeriVelChanged()">&nbsp;
-	Parameter lock: <select id="paramLockSelect">
+	<table>
+		<tr>
+	<td>Periapsis AMSL: <input type="text" id="periInput" size="8" onchange="PeriapsisChanged()"></td>
+	<td>Velocity: <input type="text" id="perivelInput" size="8" onchange="PeriVelChanged()"></td>
+	<td>Parameter lock: <select id="paramLockSelect">
 		<option value="apo-peri" selected>Apoapsis-Periapsis</option>
 		<option value="aps-vel">Apside-Velocity</option>
-	</select><br>
-	Apoapsis (above ground): <input type="text" id="apoInput" size="8" onchange="ApsoapsisChanged()">&nbsp;
-	Velocity: <input type="text" id="apovelInput" size="8" onchange="ApoVelChanged()"><br>
+	</select></td>
+		</tr>
+		<tr>
+	<td>Apoapsis AMSL: <input type="text" id="apoInput" size="8" onchange="ApsoapsisChanged()"></td>
+	<td>Velocity: <input type="text" id="apovelInput" size="8" onchange="ApoVelChanged()"></td>
+	<td><input type="checkbox" id="safetyBtn" size="8" onchange="SafetyBtnChanged()">Safety</td>
+		</tr>
+	</table>
 	<div><textarea id="debugDiv" rows="20" cols="60" wrap="virtual" style="width:640px; height:250px"></textarea></div><br>
 </body>
 </html>
