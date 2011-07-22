@@ -33,6 +33,9 @@ var periapsis = 0, apoapsis = 0;
 var periapsisVel = 0, apoapsisVel = 0;// these are calculated from the above for elliptical orbits
 var elliptical = true;
 
+var lenScale = 1;
+var velScale = 1;
+
 var safety = false;
 
 //************************************************************************************************
@@ -291,6 +294,12 @@ function UpdateStats()
 	peri = periapsis;
 	apo = apoapsis;
 	
+	lenprec = (lenScale <= 1)? 1 : 4;
+	velprec = (velScale <= 1)? 1 : 4;
+	document.getElementById("periInput").value = ((periapsis - KERBIN_R)/lenScale).toFixed(lenprec);
+	document.getElementById("apoInput").value = ((apoapsis - KERBIN_R)/lenScale).toFixed(lenprec);
+	document.getElementById("perivelInput").value = (periapsisVel/velScale).toFixed(velprec);
+	document.getElementById("apovelInput").value = (apoapsisVel/velScale).toFixed(velprec);
 	if(elliptical)
 	{
 		vperi = periapsisVel;
@@ -304,10 +313,6 @@ function UpdateStats()
 		periHohDV = Math.abs(vperi - Math.sqrt(KERBIN_GM/periapsis))
 		apoHohDV = Math.abs(vapo - Math.sqrt(KERBIN_GM/apoapsis))
 	
-		document.getElementById("periInput").value = periapsis - KERBIN_R;
-		document.getElementById("apoInput").value = apoapsis - KERBIN_R;
-		document.getElementById("perivelInput").value = periapsisVel;
-		document.getElementById("apovelInput").value = apoapsisVel;
 		writedbg("periapsis: " + (periapsis/1e3).toFixed(4) + " km, apoapsis: " + (apoapsis/1e3).toFixed(4) + " km");
 		writedbg("periapsis: " + ((periapsis - KERBIN_R)/1e3).toFixed(4) + " km AMSL, " +
 			"apoapsis: " + ((apoapsis - KERBIN_R)/1e3).toFixed(4) + " km AMSL");
@@ -325,10 +330,6 @@ function UpdateStats()
 	}
 	else
 	{
-		document.getElementById("periInput").value = periapsis - KERBIN_R;
-		document.getElementById("apoInput").value = apoapsis - KERBIN_R;
-		document.getElementById("perivelInput").value = periapsisVel;
-		document.getElementById("apovelInput").value = apoapsisVel;
 		writedbg("periapsis: " + (periapsis/1e3).toFixed(4) + " km");
 		writedbg("periapsis: " + ((periapsis - KERBIN_R)/1e3).toFixed(4) + " km AMSL");
 		writedbg("velocity at periapsis: " + periapsisVel.toFixed(1) +
@@ -338,7 +339,7 @@ function UpdateStats()
 
 function PeriapsisChanged() {
 	paramLock = document.getElementById("paramLockSelect").value;
-	peri = +document.getElementById("periInput").value + KERBIN_R;
+	peri = (+document.getElementById("periInput").value + KERBIN_R)*lenScale;
 	if(paramLock == "apo-peri")
 		SetFromPeriapsis(peri);
 	else
@@ -349,7 +350,7 @@ function PeriapsisChanged() {
 }
 function ApsoapsisChanged() {
 	paramLock = document.getElementById("paramLockSelect").value;
-	apo = +document.getElementById("apoInput").value + KERBIN_R;
+	apo = (+document.getElementById("apoInput").value + KERBIN_R)*lenScale;
 	if(paramLock == "apo-peri")
 		SetFromApoapsis(apo);
 	else
@@ -362,7 +363,7 @@ function ApsoapsisChanged() {
 // Set velocity at apoapsis, recompute periapsis
 function ApoVelChanged() {
 	paramLock = document.getElementById("paramLockSelect").value;
-	apovel = +document.getElementById("apovelInput").value;
+	apovel = +document.getElementById("apovelInput").value*velScale;
 	if(paramLock == "apo-peri")
 		SetFromApovelPerivel(apovel, periapsisVel);
 	else
@@ -374,7 +375,7 @@ function ApoVelChanged() {
 // Set velocity at periapsis, recompute apoapsis
 function PeriVelChanged() {
 	paramLock = document.getElementById("paramLockSelect").value;
-	perivel = +document.getElementById("perivelInput").value;
+	perivel = +document.getElementById("perivelInput").value*velScale;
 	if(paramLock == "apo-peri")
 		SetFromApovelPerivel(apoapsisVel, perivel);
 	else
@@ -478,6 +479,32 @@ function MouseDragAltitude(evt, x, y, prevX, prevY) {
 	DrawMainCanvas();
 }
 
+function UnitsChanged(self)
+{
+	units = document.getElementById("unitsSelect").value;
+	if(units == "m,m/s") {
+		lenScale = 1;
+		velScale = 1;
+	}
+	else if(units == "km,m/s") {
+		lenScale = 1000;
+		velScale = 1;
+	}
+	else if(units == "m,km/s") {
+		lenScale = 1;
+		velScale = 1000;
+	}
+	else if(units == "km,km/s") {
+		lenScale = 1000;
+		velScale = 1000;
+	}
+	else {
+		lenScale = 1;
+		velScale = 1;
+	}
+	UpdateStats();
+}
+
 function SafetyBtnChanged(self)
 {
 	safety = document.getElementById("safetyBtn").checked;
@@ -571,6 +598,12 @@ window.onload = function() {
 		<tr>
 	<td>Apoapsis AMSL: <input type="text" id="apoInput" size="8" onchange="ApsoapsisChanged()"></td>
 	<td>Velocity: <input type="text" id="apovelInput" size="8" onchange="ApoVelChanged()"></td>
+	<td>Units: <select id="unitsSelect" onchange="UnitsChanged()">
+		<option value="m,m/s" selected>m, m/s</option>
+		<option value="km,m/s">km, m/s</option>
+		<option value="m,km/s">m, km/s</option>
+		<option value="km,km/s">km, km/s</option>
+	</select></td>
 	<td><input type="checkbox" id="safetyBtn" size="8" onchange="SafetyBtnChanged()">Ignore Mouse</td>
 		</tr>
 	</table>
